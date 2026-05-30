@@ -222,8 +222,8 @@
             background: linear-gradient(270deg, rgba(34, 65, 95, 0.12), transparent 72%);
         }
 
-        #prevBtn:hover,
-        #nextBtn:hover {
+        #leftright:hover #prevBtn,
+        #leftright:hover #nextBtn {
             opacity: 1;
         }
 
@@ -620,7 +620,7 @@
         <div class="search-panel" id="searchContainer">
             <label class="search-label" for="searchInput">拼音 / 页码</label>
             <input type="text" id="searchInput" placeholder="miao、1">
-            <button id="searchBtn" onclick="searchImage()">跳转页面</button>
+            <button id="searchBtn" onclick="searchImage()">跳转</button>
         </div>
 
         <main class="workspace">
@@ -1391,15 +1391,6 @@
             return new URL('images/' + imageName, assetBaseUrl).href;
         }
         
-        function preloadImage(src) {
-            const img = new Image();
-            img.src = src;
-        }
-        function preloadAround(index) {
-            preloadImage(getImagePath(index + 1));
-            preloadImage(getImagePath(index - 1));
-        }
-
         function updateUIState() {
             const pageLabel = getPageLabel(currentImageIndex);
             pageLabelEl.textContent = pageLabel;
@@ -1409,10 +1400,8 @@
 
         function showImage() {
             const src = getImagePath(currentImageIndex);
-            preloadImage(src);
             mainImage.src = src;
             mainImage.alt = '现代汉语词典第 ' + currentImageIndex + ' 页';
-            preloadAround(currentImageIndex);
             updateUIState();
         }
 
@@ -1432,24 +1421,6 @@
             return num;
         }
 
-        function showButtons() {
-            document.getElementById('prevBtn').style.display = 'block';
-            document.getElementById('nextBtn').style.display = 'block';
-        }
-
-        function hideButtons() {
-            document.getElementById('prevBtn').style.display = 'none';
-            document.getElementById('nextBtn').style.display = 'none';
-        }
-
-        mainImage.addEventListener('mouseenter', showButtons);
-        mainImage.addEventListener('mouseleave', hideButtons);
-
-        document.getElementById('prevBtn').addEventListener('mouseenter', showButtons);
-        document.getElementById('prevBtn').addEventListener('mouseleave', hideButtons);
-
-        document.getElementById('nextBtn').addEventListener('mouseenter', showButtons);
-        document.getElementById('nextBtn').addEventListener('mouseleave', hideButtons);
         document.body.classList.add('with-sidebar-open');
         sidebarToggleBtn.addEventListener('click', toggleSidebar);
         helpOpenBtnEl.addEventListener('click', openHelpModal);
