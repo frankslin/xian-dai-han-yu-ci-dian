@@ -113,10 +113,40 @@
     <script>
         let currentImageIndex = 5; // Initial image index
         const totalImages = 1897; // Total number of images
+        let lastWheelTime = 0;
+        let wheelDeltaXAcc = 0;
+        const wheelThreshold = 80;
+        const wheelCooldownMs = 250;
 
         document.getElementById('searchInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') searchImage();
         });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                changeImage(-1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                changeImage(1);
+            }
+        });
+
+        document.addEventListener('wheel', function(e) {
+            if (!e.deltaX || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            wheelDeltaXAcc += e.deltaX;
+            const now = Date.now();
+            if (Math.abs(wheelDeltaXAcc) < wheelThreshold || now - lastWheelTime < wheelCooldownMs) return;
+            if (wheelDeltaXAcc > 0) {
+                changeImage(1);
+            } else {
+                changeImage(-1);
+            }
+            lastWheelTime = now;
+            wheelDeltaXAcc = 0;
+        }, { passive: true });
 
         function searchImage() {
             const searchInput = document.getElementById('searchInput').value;
