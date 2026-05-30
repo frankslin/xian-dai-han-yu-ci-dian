@@ -630,7 +630,7 @@
                         <span class="badge"><strong id="pageLabel">扉页</strong></span>
                         <span class="badge" id="pageProgress">5 / 1897</span>
                     </div>
-                    <img id="mainImage" src="images/0005.jpg" alt="现代汉语词典页面">
+                    <img id="mainImage" src="images/0005.png" alt="现代汉语词典页面">
                     <div id="prevBtn" onclick="changeImage(-1)" aria-label="上一页" title="上一页"></div>
                     <div id="nextBtn" onclick="changeImage(1)" aria-label="下一页" title="下一页"></div>
                 </div>
@@ -1387,7 +1387,10 @@
         }
 
         function getImagePath(index) {
-            const imageName = pad(index, 4) + '.jpg';
+            const numericIndex = Number(index);
+            const resolvedIndex = Number.isFinite(numericIndex) ? numericIndex : parseInt(index, 10);
+            const extension = (resolvedIndex >= 5 && resolvedIndex <= 1894) ? '.png' : '.jpg';
+            const imageName = pad(resolvedIndex, 4) + extension;
             return new URL('images/' + imageName, assetBaseUrl).href;
         }
         
@@ -1406,12 +1409,9 @@
         }
 
         function changeImage(offset) {
-            currentImageIndex += offset;
-            if (currentImageIndex < 1) {
-                currentImageIndex = 1;
-            } else if (currentImageIndex > totalImages) {
-                currentImageIndex = totalImages;
-            }
+            const nextIndex = currentImageIndex + offset;
+            if (nextIndex < 1 || nextIndex > totalImages) return;
+            currentImageIndex = nextIndex;
             showImage();
         }
 
