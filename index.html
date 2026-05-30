@@ -138,7 +138,6 @@
         document.addEventListener('wheel', function(e) {
             if (!e.deltaX || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-            e.preventDefault();
 
             if (wheelResetTimer) clearTimeout(wheelResetTimer);
             wheelResetTimer = setTimeout(function() {
@@ -152,6 +151,7 @@
                 wheelDeltaXAcc = 0;
                 return;
             }
+            e.preventDefault();
             if (wheelDeltaXAcc > 0) {
                 changeImage(1);
             } else {
@@ -159,7 +159,7 @@
             }
             lastWheelTime = now;
             wheelDeltaXAcc = 0;
-        });
+        }, { passive: false });
 
         function searchImage() {
             const searchInput = document.getElementById('searchInput').value;
