@@ -114,7 +114,7 @@
         let currentImageIndex = 5; // Initial image index
         const totalImages = 1897; // Total number of images
         let lastWheelTime = 0;
-        let wheelDeltaXAcc = 0;
+        let accumulatedWheelDeltaX = 0;
         let wheelResetTimer = null;
         const wheelThreshold = 80;
         const wheelCooldownMs = 250;
@@ -141,24 +141,24 @@
 
             if (wheelResetTimer) clearTimeout(wheelResetTimer);
             wheelResetTimer = setTimeout(function() {
-                wheelDeltaXAcc = 0;
+                accumulatedWheelDeltaX = 0;
             }, wheelResetMs);
 
-            wheelDeltaXAcc += e.deltaX;
+            accumulatedWheelDeltaX += e.deltaX;
             const now = Date.now();
-            if (Math.abs(wheelDeltaXAcc) < wheelThreshold) return;
+            if (Math.abs(accumulatedWheelDeltaX) < wheelThreshold) return;
             if (now - lastWheelTime < wheelCooldownMs) {
-                wheelDeltaXAcc = 0;
+                accumulatedWheelDeltaX = 0;
                 return;
             }
             e.preventDefault();
-            if (wheelDeltaXAcc > 0) {
+            if (accumulatedWheelDeltaX > 0) {
                 changeImage(1);
             } else {
                 changeImage(-1);
             }
             lastWheelTime = now;
-            wheelDeltaXAcc = 0;
+            accumulatedWheelDeltaX = 0;
         }, { passive: false });
 
         function searchImage() {
