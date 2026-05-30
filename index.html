@@ -630,7 +630,7 @@
                         <span class="badge"><strong id="pageLabel">扉页</strong></span>
                         <span class="badge" id="pageProgress">5 / 1897</span>
                     </div>
-                    <img id="mainImage" src="images_400w/0005.webp" alt="现代汉语词典页面">
+                    <img id="mainImage" src="images/0005.jpg" alt="现代汉语词典页面">
                     <div id="prevBtn" onclick="changeImage(-1)" aria-label="上一页" title="上一页"></div>
                     <div id="nextBtn" onclick="changeImage(1)" aria-label="下一页" title="下一页"></div>
                 </div>
@@ -1387,21 +1387,8 @@
         }
 
         function getImagePath(index) {
-            const imageName = pad(index, 4) + '.webp';
-
-            const width = window.innerWidth;
-
-            let folder = "images_800w/"; // 默认
-
-            if (width <= 600) {
-                folder = "images_400w/";
-            } else if (width <= 1200) {
-                folder = "images_800w/";
-            } else {
-                folder = "images_1600w/";
-            }
-
-            return new URL(folder + imageName, assetBaseUrl).href;
+            const imageName = pad(index, 4) + '.jpg';
+            return new URL('images/' + imageName, assetBaseUrl).href;
         }
         
         function preloadImage(src) {
