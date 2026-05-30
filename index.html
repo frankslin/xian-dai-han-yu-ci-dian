@@ -55,6 +55,32 @@
             display: none;
             position: absolute; /* Changed this line */
             top: 0; /* Added this line */
+            transition: background-color 0.2s ease;
+        }
+
+        #prevBtn:hover,
+        #nextBtn:hover {
+            background-color: rgba(0, 0, 0, 0.15);
+        }
+
+        #prevBtn:hover::after {
+            content: "◀";
+            font-size: 2rem;
+            color: rgba(0, 0, 0, 0.5);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #nextBtn:hover::after {
+            content: "▶";
+            font-size: 2rem;
+            color: rgba(0, 0, 0, 0.5);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
 
         #prevBtn {
@@ -87,6 +113,10 @@
     <script>
         let currentImageIndex = 5; // Initial image index
         const totalImages = 1897; // Total number of images
+
+        document.getElementById('searchInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') searchImage();
+        });
 
         function searchImage() {
             const searchInput = document.getElementById('searchInput').value;
