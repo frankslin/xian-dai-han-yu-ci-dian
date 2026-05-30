@@ -115,8 +115,10 @@
         const totalImages = 1897; // Total number of images
         let lastWheelTime = 0;
         let wheelDeltaXAcc = 0;
+        let wheelResetTimer = null;
         const wheelThreshold = 80;
         const wheelCooldownMs = 250;
+        const wheelResetMs = 180;
 
         document.getElementById('searchInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') searchImage();
@@ -136,9 +138,19 @@
         document.addEventListener('wheel', function(e) {
             if (!e.deltaX || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+
+            if (wheelResetTimer) clearTimeout(wheelResetTimer);
+            wheelResetTimer = setTimeout(function() {
+                wheelDeltaXAcc = 0;
+            }, wheelResetMs);
+
             wheelDeltaXAcc += e.deltaX;
             const now = Date.now();
-            if (Math.abs(wheelDeltaXAcc) < wheelThreshold || now - lastWheelTime < wheelCooldownMs) return;
+            if (Math.abs(wheelDeltaXAcc) < wheelThreshold) return;
+            if (now - lastWheelTime < wheelCooldownMs) {
+                wheelDeltaXAcc = 0;
+                return;
+            }
             if (wheelDeltaXAcc > 0) {
                 changeImage(1);
             } else {
