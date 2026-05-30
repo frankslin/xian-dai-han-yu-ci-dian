@@ -120,9 +120,12 @@
         const wheelCooldownMs = 250;
         const wheelResetMs = 180;
 
-        document.getElementById('searchInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') searchImage();
-        });
+        const searchInputEl = document.getElementById('searchInput');
+        if (searchInputEl) {
+            searchInputEl.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') searchImage();
+            });
+        }
 
         document.addEventListener('keydown', function(e) {
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
