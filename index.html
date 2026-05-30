@@ -138,6 +138,7 @@
         document.addEventListener('wheel', function(e) {
             if (!e.deltaX || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+            e.preventDefault();
 
             if (wheelResetTimer) clearTimeout(wheelResetTimer);
             wheelResetTimer = setTimeout(function() {
@@ -158,7 +159,7 @@
             }
             lastWheelTime = now;
             wheelDeltaXAcc = 0;
-        }, { passive: true });
+        });
 
         function searchImage() {
             const searchInput = document.getElementById('searchInput').value;
