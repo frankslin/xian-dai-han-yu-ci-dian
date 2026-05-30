@@ -1305,6 +1305,60 @@
             return imageIndex;
         }
 
+        function parsePositiveIntegerParam(value) {
+            if (!/^\d+$/.test(value || '')) return null;
+            const parsed = Number(value);
+            if (!Number.isInteger(parsed) || parsed < 1) return null;
+            return parsed;
+        }
+
+        function getInitialImageIndexFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+
+            const rawLogicalParam = params.get('page') || params.get('p');
+            const logicalPage = parsePositiveIntegerParam(rawLogicalParam);
+            if (logicalPage !== null) {
+                const mappedIndex = logicalPage + 94;
+                if (mappedIndex >= 1 && mappedIndex <= totalImages) {
+                    return mappedIndex;
+                }
+            }
+
+            const rawImageParam = params.get('id') || params.get('image') || params.get('img');
+            const imageIndex = parsePositiveIntegerParam(rawImageParam);
+            if (imageIndex !== null && imageIndex >= 1 && imageIndex <= totalImages) {
+                return imageIndex;
+            }
+
+            return null;
+        }
+
+        function syncPageIdParamInUrl() {
+            if (!window.history || typeof window.history.replaceState !== 'function') return;
+            const url = new URL(window.location.href);
+            const logicalPage = currentImageIndex - 94;
+            if (logicalPage >= 1) {
+                const nextPage = String(logicalPage);
+                const currentPage = url.searchParams.get('page');
+                if (currentPage === nextPage && !url.searchParams.has('id') && !url.searchParams.has('image') && !url.searchParams.has('img') && !url.searchParams.has('p')) return;
+                url.searchParams.set('page', nextPage);
+                url.searchParams.delete('p');
+                url.searchParams.delete('id');
+                url.searchParams.delete('image');
+                url.searchParams.delete('img');
+            } else {
+                const nextId = String(currentImageIndex);
+                const currentId = url.searchParams.get('id');
+                if (currentId === nextId && !url.searchParams.has('page') && !url.searchParams.has('p') && !url.searchParams.has('image') && !url.searchParams.has('img')) return;
+                url.searchParams.set('id', nextId);
+                url.searchParams.delete('image');
+                url.searchParams.delete('img');
+                url.searchParams.delete('page');
+                url.searchParams.delete('p');
+            }
+            window.history.replaceState(null, '', url);
+        }
+
         function getPageNumberByName(name) {
             const normalizedName = name.trim().toLowerCase();
             const result = SEARCH_BOOKMARKS.find(function(item) {
@@ -1406,6 +1460,7 @@
             mainImage.src = src;
             mainImage.alt = '现代汉语词典第 ' + currentImageIndex + ' 页';
             updateUIState();
+            syncPageIdParamInUrl();
         }
 
         function changeImage(offset) {
@@ -1430,6 +1485,11 @@
         window.addEventListener('resize', function() {
             showImage();
         });
+
+        const initialImageIndex = getInitialImageIndexFromUrl();
+        if (initialImageIndex !== null) {
+            currentImageIndex = initialImageIndex;
+        }
 
         showImage();
     </script>
