@@ -1,0 +1,96 @@
+{
+ "letters": {
+  "a": "a-b",
+  "b": "a-b",
+  "c": "c-d",
+  "d": "c-d",
+  "e": "e-g",
+  "f": "e-g",
+  "g": "e-g",
+  "h": "h-j",
+  "j": "h-j",
+  "k": "k-m",
+  "l": "k-m",
+  "m": "k-m",
+  "n": "n-r",
+  "o": "n-r",
+  "p": "n-r",
+  "q": "n-r",
+  "r": "n-r",
+  "s": "s-t",
+  "t": "s-t",
+  "w": "w-x",
+  "x": "w-x",
+  "y": "y",
+  "z": "z"
+ },
+ "west": "west",
+ "shards": [
+  {
+   "key": "a-b",
+   "file": "data/dict/a-b.json",
+   "count": 4505,
+   "bytes": 612292
+  },
+  {
+   "key": "c-d",
+   "file": "data/dict/c-d.json",
+   "count": 8333,
+   "bytes": 1098016
+  },
+  {
+   "key": "e-g",
+   "file": "data/dict/e-g.json",
+   "count": 6085,
+   "bytes": 824212
+  },
+  {
+   "key": "h-j",
+   "file": "data/dict/h-j.json",
+   "count": 8224,
+   "bytes": 1073617
+  },
+  {
+   "key": "k-m",
+   "file": "data/dict/k-m.json",
+   "count": 7701,
+   "bytes": 1023187
+  },
+  {
+   "key": "n-r",
+   "file": "data/dict/n-r.json",
+   "count": 6681,
+   "bytes": 889220
+  },
+  {
+   "key": "s-t",
+   "file": "data/dict/s-t.json",
+   "count": 7980,
+   "bytes": 1080340
+  },
+  {
+   "key": "w-x",
+   "file": "data/dict/w-x.json",
+   "count": 5979,
+   "bytes": 772289
+  },
+  {
+   "key": "y",
+   "file": "data/dict/y.json",
+   "count": 5081,
+   "bytes": 646295
+  },
+  {
+   "key": "z",
+   "file": "data/dict/z.json",
+   "count": 5004,
+   "bytes": 668965
+  },
+  {
+   "key": "west",
+   "file": "data/dict/west.json",
+   "count": 234,
+   "bytes": 24925
+  }
+ ]
+}

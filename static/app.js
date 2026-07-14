@@ -213,23 +213,55 @@ function setPanelTab(tab) {
   $('tabDict').classList.toggle('on', tab === 'dict');
   $('tocView').classList.toggle('active', tab === 'toc');
   $('dictView').classList.toggle('active', tab === 'dict');
-  if (tab === 'dict') { ensureDict(); requestAnimationFrame(() => $('dictInput').focus()); }
+  if (tab === 'dict') { ensureManifest(); requestAnimationFrame(() => $('dictInput').focus()); }
 }
 
 /* ---------------------------- dictionary lookup ---------------------------- */
-// data/dict.json rows: [headword, pinyinDisplay, plainPinyin, approxImagePage, text]
-// A row's position in this array is its stable id, used for the ?w= URL param.
-let dictData = null, dictPromise = null, dictError = false;
-function ensureDict() {
-  if (dictPromise) return dictPromise;
-  const results = $('dictResults');
-  results.innerHTML = '<p class="shint">字典数据加载中…</p>';
-  dictPromise = fetch('data/dict.json').then((r) => {
+// Sharded across data/dict/manifest.json + data/dict/<shardKey>.json (built
+// by tools/build_dict_index.py, one shard per pinyin-initial-letter range,
+// sized to be roughly even). Each row: [headword, pinyinDisplay,
+// plainPinyin, approxImagePage, text]. A row's stable id for linking (?w=)
+// is "<shardKey>:<indexWithinShard>". Only the shard(s) a query actually
+// needs get fetched: a pinyin query needs exactly the one shard for its
+// first letter; a hanzi query's pinyin isn't known up front, so it needs
+// every shard (still only ever fetched once each, then cached).
+let manifest = null, manifestPromise = null, manifestError = false;
+const shardCache = {}; // key -> { data, error, promise }
+function ensureManifest() {
+  if (manifestPromise) return manifestPromise;
+  manifestPromise = fetch('data/dict/manifest.json').then((r) => {
     if (!r.ok) throw new Error('http ' + r.status);
     return r.json();
-  }).then((d) => { dictData = d; renderDictResults($('dictInput').value); return d; })
-    .catch(() => { dictError = true; renderDictResults($('dictInput').value); });
-  return dictPromise;
+  }).then((d) => { manifest = d; return d; })
+    .catch(() => { manifestError = true; });
+  return manifestPromise;
+}
+function ensureShard(key) {
+  let entry = shardCache[key];
+  if (!entry) {
+    entry = shardCache[key] = { data: null, error: false, promise: null };
+    entry.promise = fetch('data/dict/' + key + '.json').then((r) => {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).then((d) => { entry.data = d; return d; })
+      .catch(() => { entry.error = true; });
+  }
+  return entry.promise;
+}
+function shardsForQuery(hasCjk, pyQuery) {
+  if (!manifest) return [];
+  const keys = new Set();
+  if (hasCjk) {
+    // unknown pinyin -> every shard is a candidate (incl. "west": some
+    // Western-letter entries mix in Chinese, e.g. "α粒子")
+    Object.values(manifest.letters).forEach((k) => keys.add(k));
+    if (manifest.west) keys.add(manifest.west);
+  }
+  if (pyQuery) {
+    const key = manifest.letters[pyQuery[0]];
+    if (key) keys.add(key);
+  }
+  return [...keys];
 }
 function normalizeQueryPinyin(q) {
   return q.trim().toLowerCase().replace(/[1-5]$/, '').replace(/v/g, 'ü').replace(/[\s'’·]/g, '');
@@ -247,7 +279,7 @@ function quickJumpCandidate(raw) {
 }
 
 let dictSeq = 0;
-function renderDictResults(rawQuery) {
+async function renderDictResults(rawQuery) {
   const seq = ++dictSeq;
   const query = (rawQuery || '').trim();
   const results = $('dictResults');
@@ -255,63 +287,70 @@ function renderDictResults(rawQuery) {
   setContentParams({ q: query, w: null });
   if (!query) { results.innerHTML = '<p class="shint">输入汉字、词语或拼音（如 miao、xian4）来查找并跳转到大致页码；也可以直接输入正文页码或章节名，如 999、附录。</p>'; return; }
 
-  const frag = [];
+  const quickFrag = [];
   const quick = quickJumpCandidate(query);
   if (quick) {
-    frag.push(
+    quickFrag.push(
       '<button class="hit" data-jump="' + quick.image + '">' +
       '<span class="hrow"><span class="hw">跳转到' + quick.label + '</span><span class="hpg">精确</span></span>' +
       '<span class="hprev">第 ' + quick.image + ' 张扫描页</span></button>'
     );
   }
+  results.innerHTML = quickFrag.join('') + '<p class="shint">字典数据加载中…</p>';
 
-  if (dictError) {
-    frag.push('<p class="shint">字典数据加载失败，仅支持精确跳转。</p>');
-    results.innerHTML = frag.join('');
+  await ensureManifest();
+  if (seq !== dictSeq) return;
+  if (manifestError || !manifest) {
+    results.innerHTML = quickFrag.join('') + '<p class="shint">字典数据加载失败，仅支持精确跳转。</p>';
     bindHitHandlers(results);
-    return;
-  }
-  if (!dictData) {
-    frag.push('<p class="shint">字典数据加载中…</p>');
-    results.innerHTML = frag.join('');
     return;
   }
 
   const hasCjk = isCjk(query);
   const looksAlpha = /^[a-zA-Zü'’\s1-5]+$/.test(query);
   const pyQuery = looksAlpha ? normalizeQueryPinyin(query) : '';
+  const shardKeys = shardsForQuery(hasCjk, pyQuery);
+
+  const shardEntries = await Promise.all(
+    shardKeys.map((k) => ensureShard(k).then((rows) => [k, rows]).catch(() => [k, null]))
+  );
+  if (seq !== dictSeq) return;
 
   const headExact = [], headPrefix = [], pyExact = [], pyPrefix = [];
-  for (let i = 0; i < dictData.length; i++) {
-    const row = dictData[i];
-    const head = row[0];
-    const entry = { row, index: i };
-    if (hasCjk) {
-      if (head === query) headExact.push(entry);
-      else if (head.startsWith(query)) headPrefix.push(entry);
+  outer: for (const [key, rows] of shardEntries) {
+    if (!rows) continue;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const head = row[0];
+      const entry = { row, id: key + ':' + i };
+      if (hasCjk) {
+        if (head === query) headExact.push(entry);
+        else if (head.startsWith(query)) headPrefix.push(entry);
+      }
+      if (pyQuery) {
+        const py = row[2];
+        if (py === pyQuery) pyExact.push(entry);
+        else if (py.startsWith(pyQuery)) pyPrefix.push(entry);
+      }
+      if (headExact.length + headPrefix.length + pyExact.length + pyPrefix.length > 300) break outer;
     }
-    if (pyQuery) {
-      const py = row[2];
-      if (py === pyQuery) pyExact.push(entry);
-      else if (py.startsWith(pyQuery)) pyPrefix.push(entry);
-    }
-    if (headExact.length + headPrefix.length + pyExact.length + pyPrefix.length > 300) break;
   }
   const seen = new Set();
   const ordered = [...headExact, ...pyExact, ...headPrefix, ...pyPrefix].filter((e) => {
-    if (seen.has(e.index)) return false;
-    seen.add(e.index); return true;
+    if (seen.has(e.id)) return false;
+    seen.add(e.id); return true;
   });
   const shown = ordered.slice(0, 60);
 
+  const frag = [...quickFrag];
   if (!shown.length && !quick) {
     frag.push('<p class="sempty">没有找到匹配的字词。</p>');
   } else if (shown.length) {
     frag.push('<div class="scount">共 ' + ordered.length + ' 条' + (ordered.length > shown.length ? '，显示前 ' + shown.length + ' 条' : '') + '</div>');
-    for (const { row, index } of shown) {
+    for (const { row, id } of shown) {
       const [head, py, , page, text] = row;
       frag.push(
-        '<button class="hit" data-index="' + index + '">' +
+        '<button class="hit" data-id="' + id + '">' +
         '<span class="hrow"><span class="hw">' + esc(head) + '</span><span class="hpy">' + esc(py) + '</span><span class="hpg">约第 ' + page + ' 页</span></span>' +
         '<span class="hprev">' + esc(text) + '</span></button>'
       );
@@ -326,12 +365,15 @@ function bindHitHandlers(container) {
   container.querySelectorAll('.hit').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (btn.dataset.jump) { goto(+btn.dataset.jump); return; }
-      showDictDetail(+btn.dataset.index);
+      showDictDetail(btn.dataset.id);
     });
   });
 }
-function showDictDetail(index) {
-  const row = dictData && dictData[index];
+function showDictDetail(id) {
+  const key = id.split(':')[0];
+  const idx = Number(id.slice(key.length + 1));
+  const shard = shardCache[key];
+  const row = shard && shard.data && shard.data[idx];
   if (!row) return;
   const [head, py, , page, text] = row;
   $('dictSearch').classList.add('detail');
@@ -345,7 +387,7 @@ function showDictDetail(index) {
     '</div>';
   $('dictGotoBtn').addEventListener('click', () => goto(page));
   goto(page);
-  setContentParams({ w: index });
+  setContentParams({ w: id });
 }
 function backToDictResults() { $('dictSearch').classList.remove('detail'); setContentParams({ w: null }); }
 
@@ -478,14 +520,15 @@ function startApp() {
   const params = new URLSearchParams(window.location.search);
   const initialQ = params.get('q') || '';
   const rawW = params.get('w');
-  const initialW = /^\d+$/.test(rawW || '') ? Number(rawW) : null;
+  const initialW = rawW && /^[a-z-]+:\d+$/.test(rawW) ? rawW : null;
 
   if (initialQ) $('dictInput').value = initialQ;
 
   if (initialQ || initialW !== null) {
     openPanel('dict');
     if (initialW !== null) {
-      ensureDict().then(() => { if (dictData && dictData[initialW]) showDictDetail(initialW); });
+      const key = initialW.split(':')[0];
+      ensureShard(key).then(() => showDictDetail(initialW));
     }
   } else if (!isMobile()) {
     openPanel('dict');

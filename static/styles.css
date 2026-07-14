@@ -121,11 +121,11 @@ mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: in
 body.invert .leaf img, body.invert .zoom img { filter: invert(1) hue-rotate(180deg); }
 
 .tapzones { position: fixed; inset: 0; z-index: 2; display: flex; }
-.tapzones div { flex: 1; }
+.tapzones div { flex: 1; transition: background .15s ease; }
 .tapzones [data-z=prev], .tapzones [data-z=next] { cursor: pointer; }
 @media (hover: hover) {
-  .tapzones [data-z=prev]:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%); }
-  .tapzones [data-z=next]:hover { background: linear-gradient(270deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%); }
+  .tapzones [data-z=prev]:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--text) 5%, transparent), transparent 16%); }
+  .tapzones [data-z=next]:hover { background: linear-gradient(270deg, color-mix(in srgb, var(--text) 5%, transparent), transparent 16%); }
 }
 
 .edge {

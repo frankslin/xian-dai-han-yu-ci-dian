@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build data/dict.json — a headword/pinyin -> approximate page index for the
+Build data/dict/*.json — a headword/pinyin -> approximate page index for the
 scanned 《现代汉语词典》第7版 page images, from the community full-text
 transcription at https://github.com/CNMan/XDHYCD7th (cached under
 tools/.cache/, not the copyrighted scan images themselves).
@@ -15,10 +15,19 @@ Within a bucket, entries are spread proportionally across its page range by
 order of appearance. This is a best-effort estimate, not a ground truth
 page number — the UI must present it as such.
 
-Usage: python3 tools/build_dict_index.py
+Output is sharded by pinyin-initial-letter ranges (data/dict/<range>.json,
+e.g. "a-e.json"), sized to be roughly even rather than one per letter (some
+letters — s/y/z — have 10x the entries of others — o/e), plus a standalone
+"west" shard for the Western-letter-headword section. data/dict/manifest.json
+maps each letter to its shard file so the client only ever fetches the
+shard(s) a given query actually needs, not the whole corpus. A row's id for
+linking (?w=) is "<shardKey>:<indexWithinShard>".
+
+Usage: python3 tools/build_dict_index.py [--shards N]
 Reads:  tools/.cache/XDHYCD7th.txt, tools/.cache/西文字母开头的词语.txt, data/toc.json
-Writes: data/dict.json
+Writes: data/dict/manifest.json, data/dict/<range>.json
 """
+import argparse
 import json
 import re
 import unicodedata
@@ -29,7 +38,8 @@ CACHE = ROOT / "tools" / ".cache"
 MAIN_TXT = CACHE / "XDHYCD7th.txt"
 WESTERN_TXT = CACHE / "西文字母开头的词语.txt"
 TOC_JSON = ROOT / "data" / "toc.json"
-OUT_JSON = ROOT / "data" / "dict.json"
+OUT_DIR = ROOT / "data" / "dict"
+MANIFEST_JSON = OUT_DIR / "manifest.json"
 
 TONE_MARKS = {"̄", "́", "̌", "̀"}  # macron acute caron grave
 GLYPH_MAP = {"ɑ": "a", "ɡ": "g", "ŋ": "ng", "ẑ": "zh", "ĉ": "ch", "ŝ": "sh"}
@@ -122,7 +132,62 @@ def build_syllable_table(toc):
     return range_by_name
 
 
+def row_json_size(row):
+    # byte length, not char length — ensure_ascii=False means CJK text is
+    # stored as literal UTF-8 (3 bytes/char), so len(str) badly undercounts.
+    return len(json.dumps(row, ensure_ascii=False).encode("utf-8"))
+
+
+def partition_letters(letter_sizes, target_shards):
+    """Split letters, in their given (pinyin-alphabetical) order, into at most
+    `target_shards` contiguous ranges, minimizing the largest range's total
+    byte size (the classic "allocate books to minimize the max" problem,
+    solved by binary search on the answer + a greedy feasibility check)."""
+    letters = list(letter_sizes.keys())
+    sizes = [letter_sizes[l] for l in letters]
+    if len(letters) <= target_shards:
+        return [[l] for l in letters]
+
+    def shards_needed(cap):
+        count, cur = 1, 0
+        for sz in sizes:
+            if cur + sz > cap:
+                count += 1
+                cur = sz
+            else:
+                cur += sz
+        return count
+
+    lo, hi = max(sizes), sum(sizes)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if shards_needed(mid) <= target_shards:
+            hi = mid
+        else:
+            lo = mid + 1
+
+    cap = lo
+    shards, current, current_size = [], [], 0
+    for letter, sz in zip(letters, sizes):
+        if current and current_size + sz > cap:
+            shards.append(current)
+            current, current_size = [], 0
+        current.append(letter)
+        current_size += sz
+    if current:
+        shards.append(current)
+    return shards
+
+
+def shard_key(letters):
+    return letters[0] if len(letters) == 1 else f"{letters[0]}-{letters[-1]}"
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--shards", type=int, default=10, help="target number of main-corpus shards (letters are merged to balance size)")
+    args = ap.parse_args()
+
     toc = json.loads(TOC_JSON.read_text(encoding="utf-8"))
     syllable_range = build_syllable_table(toc)
     section_image = {s["name"]: s["image"] for s in toc["sections"]}
@@ -133,7 +198,9 @@ def main():
     )
 
     # --- bucket assignment for the main corpus: single-char headwords reset
-    # the current pinyin-syllable bucket; word entries inherit it.
+    # the current pinyin-syllable bucket; word entries inherit it. The
+    # syllable's own first letter (not any individual entry's, which can be
+    # noisy/empty on edge cases — see README misses) decides the shard.
     current_syllable = None
     misses = 0
     buckets = []  # list of (syllable_or_None, [entries])
@@ -148,28 +215,29 @@ def main():
             buckets.append((current_syllable, []))
         buckets[-1][1].append(e)
 
-    out = []
+    rows_by_letter = {}  # letter -> [row, ...]
     for syl, group in buckets:
         if syl is None or syl not in syllable_range:
             continue
         start, end = syllable_range[syl]
         n = len(group)
         span = max(end - start, 1)
+        letter = syl[0]
         for k, e in enumerate(group):
             page = start + (k * span) // max(n, 1)
             page = min(page, end - 1) if end > start else start
-            out.append(
-                (
-                    e["head"],
-                    pretty_pinyin(e["pinyinRaw"]),
-                    plain_pinyin(e["pinyinRaw"]),
-                    page,
-                    e["text"],
-                )
+            row = (
+                e["head"],
+                pretty_pinyin(e["pinyinRaw"]),
+                plain_pinyin(e["pinyinRaw"]),
+                page,
+                e["text"],
             )
+            rows_by_letter.setdefault(letter, []).append(row)
 
     # --- western-letter section: one flat bucket between its own TOC anchor
-    # and the next section (附录).
+    # and the next section (附录), shipped as its own "west" shard.
+    west_rows = []
     if western_entries:
         start = section_image.get("西文字母开头的词语")
         end = section_image.get("附录", toc["totalImages"])
@@ -179,24 +247,60 @@ def main():
             for k, e in enumerate(western_entries):
                 page = start + (k * span) // max(n, 1)
                 page = min(page, end - 1) if end > start else start
-                out.append(
-                (
-                    e["head"],
-                    pretty_pinyin(e["pinyinRaw"]),
-                    plain_pinyin(e["pinyinRaw"]),
-                    page,
-                    e["text"],
+                west_rows.append(
+                    (
+                        e["head"],
+                        pretty_pinyin(e["pinyinRaw"]),
+                        plain_pinyin(e["pinyinRaw"]),
+                        page,
+                        e["text"],
+                    )
                 )
-            )
 
-    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(
-        json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
-    )
+    # --- partition the (pinyin-ordered) letters into evenly-sized shards ---
+    letter_order = [l for l in "abcdefghjklmnopqrstwxyz" if l in rows_by_letter]
+    letter_sizes = {
+        l: sum(row_json_size(r) for r in rows_by_letter[l]) for l in letter_order
+    }
+    partitions = partition_letters(letter_sizes, args.shards)
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for old in OUT_DIR.glob("*.json"):
+        old.unlink()
+
+    manifest_shards = []
+    letters_map = {}
+
+    def write_shard(key, rows):
+        path = OUT_DIR / f"{key}.json"
+        path.write_text(
+            json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        )
+        manifest_shards.append(
+            {"key": key, "file": f"data/dict/{key}.json", "count": len(rows), "bytes": path.stat().st_size}
+        )
+
+    for letters in partitions:
+        key = shard_key(letters)
+        rows = [r for l in letters for r in rows_by_letter[l]]
+        write_shard(key, rows)
+        for l in letters:
+            letters_map[l] = key
+
+    if west_rows:
+        write_shard("west", west_rows)
+
+    manifest = {"letters": letters_map, "west": "west" if west_rows else None, "shards": manifest_shards}
+    MANIFEST_JSON.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    total_rows = sum(s["count"] for s in manifest_shards)
+    total_bytes = sum(s["bytes"] for s in manifest_shards)
     print(f"entries parsed: {len(main_entries)} main + {len(western_entries)} western")
-    print(f"entries written: {len(out)}")
+    print(f"entries written: {total_rows} across {len(manifest_shards)} shards")
     print(f"single-char syllable lookup misses: {misses}")
-    print(f"output size: {OUT_JSON.stat().st_size / 1e6:.2f} MB -> {OUT_JSON}")
+    for s in manifest_shards:
+        print(f"  {s['key']:>8s}  {s['count']:6d} rows  {s['bytes']/1024:8.1f} KB")
+    print(f"total: {total_bytes / 1e6:.2f} MB -> {OUT_DIR}")
 
 
 if __name__ == "__main__":
