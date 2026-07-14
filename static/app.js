@@ -7,6 +7,9 @@
  *   ?id=N / ?image=N / ?img=N   raw image index N (front matter etc.)
  * The current page is always reflected back into the URL as ?page=
  * (once inside the body) or ?id= (front matter), via history.replaceState.
+ * Additionally: ?q= mirrors the dict-panel search box, and ?w= mirrors the
+ * currently open entry's row index in data/dict.json, so a search or a
+ * specific entry can be linked/bookmarked directly.
  * ------------------------------------------------------------------ */
 
 // These two mirror data/toc.json's totalImages / bodyStartImage. Duplicated
@@ -20,9 +23,10 @@ const DEFAULT_IMAGE = 5;
 
 const $ = (id) => document.getElementById(id);
 const assetBaseUrl = new URL('./', window.location.href);
+const isMobile = () => window.matchMedia('(max-width:640px)').matches;
 
 const nav = $('nav'), controls = $('controls'), deck = $('deck'), stage = $('stage');
-const slider = $('slider'), jump = $('jump'), pageProgress = $('pageProgress'), pageLabel = $('pageLabel');
+const jump = $('jump'), pageProgress = $('pageProgress'), pageLabel = $('pageLabel');
 
 let currentImageIndex = DEFAULT_IMAGE;
 let TOC = null; // { totalImages, bodyStartImage, sections:[{name,image}], syllables:[{name,image}] }
@@ -97,6 +101,26 @@ function getPageNumberByName(name) {
   return hit ? hit.image : null;
 }
 
+// Reflects the dict-panel search query (?q=) and, when an entry's detail is
+// open, its stable data/dict.json row index (?w=) into the URL — alongside,
+// never instead of, the existing page/p/id/image/img params.
+function setContentParams({ q, w } = {}) {
+  if (!window.history || typeof window.history.replaceState !== 'function') return;
+  const url = new URL(window.location.href);
+  let changed = false;
+  if (q !== undefined) {
+    const next = q ? q : null;
+    const cur = url.searchParams.get('q');
+    if (next !== cur) { next === null ? url.searchParams.delete('q') : url.searchParams.set('q', next); changed = true; }
+  }
+  if (w !== undefined) {
+    const next = (w === null || w === undefined) ? null : String(w);
+    const cur = url.searchParams.get('w');
+    if (next !== cur) { next === null ? url.searchParams.delete('w') : url.searchParams.set('w', next); changed = true; }
+  }
+  if (changed) window.history.replaceState(null, '', url);
+}
+
 /* ---------------------------- labels ---------------------------- */
 function getPageLabel(index) {
   if (!TOC) return '';
@@ -128,12 +152,9 @@ function leafEl(i) {
 function updateUI() {
   pageLabel.textContent = getPageLabel(currentImageIndex) || '…';
   pageProgress.textContent = formatDisplayPage(currentImageIndex) + ' · ' + currentImageIndex + '/' + TOTAL_IMAGES;
-  if (document.activeElement !== slider) slider.value = currentImageIndex;
   if (document.activeElement !== jump) jump.value = currentImageIndex;
   $('edgePrev').disabled = currentImageIndex <= 1;
   $('edgeNext').disabled = currentImageIndex >= TOTAL_IMAGES;
-  $('firstBtn').disabled = currentImageIndex <= 1;
-  $('lastBtn').disabled = currentImageIndex >= TOTAL_IMAGES;
   renderToc();
 }
 function showImage() {
@@ -169,7 +190,7 @@ function renderToc() {
     btn.type = 'button';
     btn.className = 'toc-item' + (b.name === currentLabel ? ' active' : '');
     btn.innerHTML = '<span>' + b.name + '</span><span class="tp">' + formatShortPage(b.image) + '</span>';
-    btn.addEventListener('click', () => { goto(b.image); if (window.matchMedia('(max-width:640px)').matches) closePanel(); });
+    btn.addEventListener('click', () => { goto(b.image); if (isMobile()) closePanel(); });
     tocListEl.appendChild(btn);
   }
 }
@@ -197,6 +218,7 @@ function setPanelTab(tab) {
 
 /* ---------------------------- dictionary lookup ---------------------------- */
 // data/dict.json rows: [headword, pinyinDisplay, plainPinyin, approxImagePage, text]
+// A row's position in this array is its stable id, used for the ?w= URL param.
 let dictData = null, dictPromise = null, dictError = false;
 function ensureDict() {
   if (dictPromise) return dictPromise;
@@ -230,6 +252,7 @@ function renderDictResults(rawQuery) {
   const query = (rawQuery || '').trim();
   const results = $('dictResults');
   $('dictSearch').classList.remove('detail');
+  setContentParams({ q: query, w: null });
   if (!query) { results.innerHTML = '<p class="shint">输入汉字、词语或拼音（如 miao、xian4）来查找并跳转到大致页码；也可以直接输入正文页码或章节名，如 999、附录。</p>'; return; }
 
   const frag = [];
@@ -259,26 +282,25 @@ function renderDictResults(rawQuery) {
   const pyQuery = looksAlpha ? normalizeQueryPinyin(query) : '';
 
   const headExact = [], headPrefix = [], pyExact = [], pyPrefix = [];
-  const LIMIT_SCAN_HINT = 5000;
   for (let i = 0; i < dictData.length; i++) {
     const row = dictData[i];
     const head = row[0];
+    const entry = { row, index: i };
     if (hasCjk) {
-      if (head === query) headExact.push(row);
-      else if (head.startsWith(query)) headPrefix.push(row);
+      if (head === query) headExact.push(entry);
+      else if (head.startsWith(query)) headPrefix.push(entry);
     }
     if (pyQuery) {
       const py = row[2];
-      if (py === pyQuery) pyExact.push(row);
-      else if (py.startsWith(pyQuery)) pyPrefix.push(row);
+      if (py === pyQuery) pyExact.push(entry);
+      else if (py.startsWith(pyQuery)) pyPrefix.push(entry);
     }
     if (headExact.length + headPrefix.length + pyExact.length + pyPrefix.length > 300) break;
   }
   const seen = new Set();
-  const ordered = [...headExact, ...pyExact, ...headPrefix, ...pyPrefix].filter((row) => {
-    const key = row[0] + '' + row[1] + '' + row[3];
-    if (seen.has(key)) return false;
-    seen.add(key); return true;
+  const ordered = [...headExact, ...pyExact, ...headPrefix, ...pyPrefix].filter((e) => {
+    if (seen.has(e.index)) return false;
+    seen.add(e.index); return true;
   });
   const shown = ordered.slice(0, 60);
 
@@ -286,10 +308,10 @@ function renderDictResults(rawQuery) {
     frag.push('<p class="sempty">没有找到匹配的字词。</p>');
   } else if (shown.length) {
     frag.push('<div class="scount">共 ' + ordered.length + ' 条' + (ordered.length > shown.length ? '，显示前 ' + shown.length + ' 条' : '') + '</div>');
-    for (const row of shown) {
+    for (const { row, index } of shown) {
       const [head, py, , page, text] = row;
       frag.push(
-        '<button class="hit" data-head="' + esc(head) + '" data-py="' + esc(py) + '" data-page="' + page + '" data-text="' + esc(text) + '">' +
+        '<button class="hit" data-index="' + index + '">' +
         '<span class="hrow"><span class="hw">' + esc(head) + '</span><span class="hpy">' + esc(py) + '</span><span class="hpg">约第 ' + page + ' 页</span></span>' +
         '<span class="hprev">' + esc(text) + '</span></button>'
       );
@@ -304,11 +326,14 @@ function bindHitHandlers(container) {
   container.querySelectorAll('.hit').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (btn.dataset.jump) { goto(+btn.dataset.jump); return; }
-      showDictDetail(btn.dataset.head, btn.dataset.py, +btn.dataset.page, btn.dataset.text);
+      showDictDetail(+btn.dataset.index);
     });
   });
 }
-function showDictDetail(head, py, page, text) {
+function showDictDetail(index) {
+  const row = dictData && dictData[index];
+  if (!row) return;
+  const [head, py, , page, text] = row;
   $('dictSearch').classList.add('detail');
   $('dictDetail').innerHTML =
     '<div class="entry">' +
@@ -320,8 +345,9 @@ function showDictDetail(head, py, page, text) {
     '</div>';
   $('dictGotoBtn').addEventListener('click', () => goto(page));
   goto(page);
+  setContentParams({ w: index });
 }
-function backToDictResults() { $('dictSearch').classList.remove('detail'); }
+function backToDictResults() { $('dictSearch').classList.remove('detail'); setContentParams({ w: null }); }
 
 /* ---------------------------- zoom ---------------------------- */
 function openZoom() { $('zoomImg').src = getImagePath(currentImageIndex); $('zoom').classList.add('open'); }
@@ -345,14 +371,10 @@ function applyInvert(on) {
 /* ---------------------------- wire up ---------------------------- */
 $('edgePrev').addEventListener('click', () => flip(-1));
 $('edgeNext').addEventListener('click', () => flip(1));
-$('firstBtn').addEventListener('click', () => goto(1));
-$('lastBtn').addEventListener('click', () => goto(TOTAL_IMAGES));
 $('prevBtn').addEventListener('click', () => flip(-1));
 $('nextBtn').addEventListener('click', () => flip(1));
 $('zoomBtn').addEventListener('click', openZoom);
 $('zoomClose').addEventListener('click', closeZoom);
-slider.addEventListener('input', () => { pageProgress.textContent = formatDisplayPage(+slider.value) + ' · ' + slider.value + '/' + TOTAL_IMAGES; });
-slider.addEventListener('change', () => goto(+slider.value));
 jump.addEventListener('change', () => goto(+jump.value));
 jump.addEventListener('keydown', (e) => { if (e.key === 'Enter') { goto(+jump.value); jump.blur(); } });
 jump.addEventListener('focus', () => jump.select());
@@ -431,17 +453,62 @@ window.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 /* ---------------------------- init ---------------------------- */
-const initial = getInitialImageIndexFromUrl();
-if (initial !== null) currentImageIndex = initial;
-showImage();
+// Nothing here loads a page image, fetches toc/dict data, or opens the
+// panel until startApp() runs — gated behind the usage-consent screen below,
+// so no dictionary content is ever shown before the user answers it.
+function startApp() {
+  const initial = getInitialImageIndexFromUrl();
+  if (initial !== null) currentImageIndex = initial;
+  showImage();
 
-if (localStorage.getItem('invert') === '1' ||
-  (localStorage.getItem('invert') === null && matchMedia('(prefers-color-scheme: dark)').matches)) {
-  applyInvert(true);
+  if (localStorage.getItem('invert') === '1' ||
+    (localStorage.getItem('invert') === null && matchMedia('(prefers-color-scheme: dark)').matches)) {
+    applyInvert(true);
+  }
+
+  fetch('data/toc.json').then((r) => r.json()).then((d) => {
+    TOC = d;
+    jump.max = TOTAL_IMAGES;
+    updateUI();
+  }).catch(() => { pageLabel.textContent = '现代汉语词典'; });
+
+  // Restore search/entry state from the URL, and default the 查字 panel open
+  // on wide screens (kept closed by default on phones, where it's a
+  // full-screen overlay, unless the URL explicitly points at content).
+  const params = new URLSearchParams(window.location.search);
+  const initialQ = params.get('q') || '';
+  const rawW = params.get('w');
+  const initialW = /^\d+$/.test(rawW || '') ? Number(rawW) : null;
+
+  if (initialQ) $('dictInput').value = initialQ;
+
+  if (initialQ || initialW !== null) {
+    openPanel('dict');
+    if (initialW !== null) {
+      ensureDict().then(() => { if (dictData && dictData[initialW]) showDictDetail(initialW); });
+    }
+  } else if (!isMobile()) {
+    openPanel('dict');
+  }
 }
 
-fetch('data/toc.json').then((r) => r.json()).then((d) => {
-  TOC = d;
-  slider.max = TOTAL_IMAGES; jump.max = TOTAL_IMAGES;
-  updateUI();
-}).catch(() => { pageLabel.textContent = '现代汉语词典'; });
+/* ---------------------------- usage-consent gate ---------------------------- */
+const CONSENT_KEY = 'usageConsent';
+const gateEl = $('gate');
+function showGateStep(step) {
+  $('gateAsk').hidden = step !== 'ask';
+  $('gateDeny').hidden = step !== 'deny';
+}
+if (localStorage.getItem(CONSENT_KEY) === 'yes') {
+  gateEl.hidden = true;
+  startApp();
+} else {
+  showGateStep('ask');
+  $('gateYes').addEventListener('click', () => {
+    localStorage.setItem(CONSENT_KEY, 'yes');
+    gateEl.hidden = true;
+    startApp();
+  });
+  $('gateNo').addEventListener('click', () => showGateStep('deny'));
+  $('gateBack').addEventListener('click', () => showGateStep('ask'));
+}

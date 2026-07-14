@@ -11,6 +11,24 @@
 </head>
 
 <body>
+    <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+        <div class="gate-panel">
+            <div class="gate-step" id="gateAsk">
+                <h2 id="gateTitle">使用须知</h2>
+                <p>您是否为个人学习、研究或欣赏而使用本站，或已购买《现代汉语词典》第7版的实体书或电子书？</p>
+                <div class="gate-actions">
+                    <button class="btn primary" id="gateYes" type="button">是，继续使用</button>
+                    <button class="btn ghost" id="gateNo" type="button">否</button>
+                </div>
+            </div>
+            <div class="gate-step" id="gateDeny" hidden>
+                <h2>无法使用</h2>
+                <p>很抱歉，本站仅供个人学习、研究、欣赏，或已持有正版《现代汉语词典》第7版实体书/电子书的用户使用。</p>
+                <button class="btn ghost" id="gateBack" type="button">重新选择</button>
+            </div>
+        </div>
+    </div>
+
     <header class="nav" id="nav">
         <div class="title">
             <b>现代汉语词典</b>
@@ -34,14 +52,11 @@
     <button class="edge right" id="edgeNext" title="下一页" aria-label="下一页">›</button>
 
     <footer class="controls" id="controls">
-        <button class="btn icon" id="firstBtn" title="第一页">⇤</button>
         <button class="btn icon" id="prevBtn" title="上一页">‹</button>
-        <input type="range" id="slider" min="1" max="1897" value="5">
         <span class="badge" id="pageProgress">5/1897</span>
         <input class="field jump" id="jump" type="number" min="1" max="1897" inputmode="numeric" title="跳转到第几张扫描页">
         <button class="btn icon" id="zoomBtn" title="放大">⤢</button>
         <button class="btn icon" id="nextBtn" title="下一页">›</button>
-        <button class="btn icon" id="lastBtn" title="最后一页">⇥</button>
     </footer>
 
     <div class="panel-scrim" id="panelScrim"></div>
