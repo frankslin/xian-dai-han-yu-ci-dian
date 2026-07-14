@@ -25,7 +25,6 @@ const nav = $('nav'), controls = $('controls'), deck = $('deck'), stage = $('sta
 const slider = $('slider'), jump = $('jump'), pageProgress = $('pageProgress'), pageLabel = $('pageLabel');
 
 let currentImageIndex = DEFAULT_IMAGE;
-let animating = false;
 let TOC = null; // { totalImages, bodyStartImage, sections:[{name,image}], syllables:[{name,image}] }
 let barsHidden = false;
 
@@ -116,15 +115,14 @@ function formatShortPage(index) {
 }
 
 /* ---------------------------- viewer ---------------------------- */
-function leafEl(i, extraClass) {
+function leafEl(i) {
   const d = document.createElement('div');
-  d.className = 'leaf' + (extraClass ? ' ' + extraClass : '');
+  d.className = 'leaf';
   const img = document.createElement('img');
   img.decoding = 'async';
   img.src = getImagePath(i);
   img.alt = '现代汉语词典第 ' + i + ' 页';
   d.appendChild(img);
-  if (extraClass) { const shade = document.createElement('div'); shade.className = 'leafshade'; d.appendChild(shade); }
   return d;
 }
 function updateUI() {
@@ -152,25 +150,11 @@ function goto(i) {
   focusStage();
 }
 function flip(dir) {
-  if (animating) return;
   const dest = currentImageIndex + dir;
   if (dest < 1 || dest > TOTAL_IMAGES) return;
-  animating = true;
-  preload(dest);
-  const closingClass = dir > 0 ? 'closing' : 'closing-back';
-  const openingClass = dir > 0 ? 'opening' : 'opening-back';
-  deck.innerHTML = '';
-  deck.appendChild(leafEl(currentImageIndex, closingClass));
-  setTimeout(() => {
-    deck.innerHTML = '';
-    deck.appendChild(leafEl(dest, openingClass));
-  }, 260);
-  setTimeout(() => {
-    currentImageIndex = dest;
-    showImage();
-    animating = false;
-    preload(currentImageIndex + dir);
-  }, 560);
+  currentImageIndex = dest;
+  showImage();
+  preload(dest + dir);
 }
 function focusStage() { if (stage) stage.focus({ preventScroll: true }); }
 
