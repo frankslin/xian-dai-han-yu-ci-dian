@@ -30,34 +30,37 @@
     </div>
 
     <header class="nav" id="nav">
-        <div class="title">
-            <b>现代汉语词典</b>
-            <small>第7版 · 商务印书馆</small>
+        <div class="nav-left">
+            <div class="title">
+                <b>现代汉语词典</b>
+                <small>第7版 · 商务印书馆</small>
+            </div>
+            <span class="badge" id="pageLabel">…</span>
         </div>
-        <span class="spacer"></span>
-        <span class="badge" id="pageLabel">…</span>
-        <button class="btn ghost icon" id="tocOpenBtn" title="目录" aria-label="目录">目</button>
-        <button class="btn ghost icon" id="dictOpenBtn" title="查字" aria-label="查字">查</button>
-        <button class="btn ghost icon" id="invertBtn" title="夜间反色" aria-label="夜间反色">◐</button>
-        <button class="btn ghost icon" id="helpOpenBtn" title="使用说明" aria-label="使用说明">?</button>
+        <div class="nav-center">
+            <button class="btn icon" id="prevBtn" title="上一页">‹</button>
+            <input class="field jump" id="jump" type="number" min="1" max="1897" inputmode="numeric" title="跳转到第几张扫描页">
+            <span class="badge" id="pageProgress">5/1897</span>
+            <button class="btn icon" id="nextBtn" title="下一页">›</button>
+            <button class="btn ghost icon" id="zoomBtn" title="放大">⤢</button>
+        </div>
+        <div class="nav-right">
+            <button class="btn ghost icon" id="tocOpenBtn" title="目录" aria-label="目录">目</button>
+            <button class="btn ghost icon" id="dictOpenBtn" title="查字" aria-label="查字">查</button>
+            <button class="btn ghost icon" id="invertBtn" title="夜间反色" aria-label="夜间反色">◐</button>
+            <button class="btn ghost icon" id="helpOpenBtn" title="使用说明" aria-label="使用说明">?</button>
+        </div>
     </header>
 
     <div class="stage" id="stage" tabindex="-1">
         <div class="deck" id="deck"></div>
+        <div class="blank-notice" id="blankNotice"><span>本页无内容</span></div>
     </div>
     <div class="tapzones" id="tapzones">
         <div data-z="prev"></div><div data-z="mid"></div><div data-z="next"></div>
     </div>
     <button class="edge left" id="edgePrev" title="上一页" aria-label="上一页">‹</button>
     <button class="edge right" id="edgeNext" title="下一页" aria-label="下一页">›</button>
-
-    <footer class="controls" id="controls">
-        <button class="btn icon" id="prevBtn" title="上一页">‹</button>
-        <span class="badge" id="pageProgress">5/1897</span>
-        <input class="field jump" id="jump" type="number" min="1" max="1897" inputmode="numeric" title="跳转到第几张扫描页">
-        <button class="btn icon" id="zoomBtn" title="放大">⤢</button>
-        <button class="btn icon" id="nextBtn" title="下一页">›</button>
-    </footer>
 
     <div class="panel-scrim" id="panelScrim"></div>
     <aside class="panel" id="panel" data-tab="toc">

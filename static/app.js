@@ -20,12 +20,15 @@ const TOTAL_IMAGES = 1897;
 const BODY_START_IMAGE = 95; // image index of logical/body page 1
 const OFFSET = BODY_START_IMAGE - 1; // imageIndex = logicalPage + OFFSET
 const DEFAULT_IMAGE = 5;
+// Pages confirmed blank in the source scan (not a data/toc.json concern —
+// this is about the images themselves, not chapter/syllable structure).
+const BLANK_IMAGES = new Set([20, 92, 94, 1862]);
 
 const $ = (id) => document.getElementById(id);
 const assetBaseUrl = new URL('./', window.location.href);
 const isMobile = () => window.matchMedia('(max-width:640px)').matches;
 
-const nav = $('nav'), controls = $('controls'), deck = $('deck'), stage = $('stage');
+const nav = $('nav'), deck = $('deck'), stage = $('stage');
 const jump = $('jump'), pageProgress = $('pageProgress'), pageLabel = $('pageLabel');
 
 let currentImageIndex = DEFAULT_IMAGE;
@@ -155,6 +158,7 @@ function updateUI() {
   if (document.activeElement !== jump) jump.value = currentImageIndex;
   $('edgePrev').disabled = currentImageIndex <= 1;
   $('edgeNext').disabled = currentImageIndex >= TOTAL_IMAGES;
+  $('blankNotice').classList.toggle('show', BLANK_IMAGES.has(currentImageIndex));
   renderToc();
 }
 function showImage() {
@@ -266,6 +270,24 @@ function shardsForQuery(hasCjk, pyQuery) {
 function normalizeQueryPinyin(q) {
   return q.trim().toLowerCase().replace(/[1-5]$/, '').replace(/v/g, 'ü').replace(/[\s'’·]/g, '');
 }
+// A trailing 1-5 (e.g. "xian4") requests that specific tone on the matched
+// entry's *first* syllable — normalizeQueryPinyin() above only strips the
+// digit for the toneless prefix match, it doesn't filter by it, so callers
+// need this too or the digit silently has no effect.
+function requestedToneFromQuery(q) {
+  const m = q.trim().match(/([1-5])$/);
+  return m ? Number(m[1]) : null;
+}
+function firstSyllableTone(pinyinDisplay) {
+  const s = pinyinDisplay || '';
+  if (s.startsWith('•')) return 5; // neutral tone, marked with a leading dot in the source
+  const lead = (s.match(/^[A-Za-zÀ-ɏ̀-ͯ]+/) || [s])[0].normalize('NFD');
+  if (lead.includes('̄')) return 1; // macron
+  if (lead.includes('́')) return 2; // acute
+  if (lead.includes('̌')) return 3; // caron
+  if (lead.includes('̀')) return 4; // grave
+  return 5;
+}
 function isCjk(ch) { return /[㐀-鿿]/.test(ch); }
 
 function quickJumpCandidate(raw) {
@@ -309,6 +331,7 @@ async function renderDictResults(rawQuery) {
   const hasCjk = isCjk(query);
   const looksAlpha = /^[a-zA-Zü'’\s1-5]+$/.test(query);
   const pyQuery = looksAlpha ? normalizeQueryPinyin(query) : '';
+  const requestedTone = looksAlpha ? requestedToneFromQuery(query) : null;
   const shardKeys = shardsForQuery(hasCjk, pyQuery);
 
   const shardEntries = await Promise.all(
@@ -327,7 +350,7 @@ async function renderDictResults(rawQuery) {
         if (head === query) headExact.push(entry);
         else if (head.startsWith(query)) headPrefix.push(entry);
       }
-      if (pyQuery) {
+      if (pyQuery && (requestedTone === null || firstSyllableTone(row[1]) === requestedTone)) {
         const py = row[2];
         if (py === pyQuery) pyExact.push(entry);
         else if (py.startsWith(pyQuery)) pyPrefix.push(entry);
@@ -385,7 +408,7 @@ function showDictDetail(id) {
     '<div class="enote">页码由拼音音节位置估算得出，可能与实际印刷页码相差一两页；如未命中，可在附近翻页查找。</div>' +
     '<button class="btn egoto" id="dictGotoBtn">跳转到该页 →</button>' +
     '</div>';
-  $('dictGotoBtn').addEventListener('click', () => goto(page));
+  $('dictGotoBtn').addEventListener('click', () => { goto(page); if (isMobile()) closePanel(); });
   goto(page);
   setContentParams({ w: id });
 }
@@ -403,7 +426,6 @@ function closeHelp() { $('helpModal').classList.remove('open'); $('helpModal').s
 function toggleBars() {
   barsHidden = !barsHidden;
   nav.classList.toggle('hidden', barsHidden);
-  controls.classList.toggle('hidden', barsHidden);
 }
 function applyInvert(on) {
   document.body.classList.toggle('invert', on);

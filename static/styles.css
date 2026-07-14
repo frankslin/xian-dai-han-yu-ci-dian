@@ -17,7 +17,7 @@
 
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
   --r1: 6px; --r2: 12px; --r-pill: 999px;
-  --nav: 56px; --controls: 56px; --panel-w: 380px;
+  --nav: 56px; --panel-w: 380px;
   --shadow: 0 2px 10px rgba(20, 30, 45, .14), 0 0 0 1px rgba(20, 30, 45, .04);
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
@@ -77,37 +77,42 @@ button { font: inherit; }
 }
 mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: inherit; border-radius: 2px; }
 
-/* ---- top nav ----------------------------------------------------------- */
+/* ---- top nav (merged title / paging / actions) -------------------------- */
 .nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 20;
-  display: flex; align-items: center; gap: var(--s3);
-  height: calc(var(--nav) + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) var(--s4) 0;
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-template-areas: "left center right";
+  align-items: center; column-gap: var(--s3);
+  min-height: calc(var(--nav) + env(safe-area-inset-top));
+  padding: calc(env(safe-area-inset-top) + var(--s2)) var(--s4) var(--s2);
   background: color-mix(in srgb, var(--bar) 90%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid var(--border);
   transition: transform .25s;
 }
 .nav.hidden { transform: translateY(-101%); }
+.nav-left { grid-area: left; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.nav-center { grid-area: center; display: flex; align-items: center; gap: var(--s2); }
+.nav-right { grid-area: right; display: flex; align-items: center; gap: var(--s2); justify-self: end; }
 .nav .title { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .nav .title b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nav .title small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nav .spacer { flex: 1; }
+.nav .jump { width: 60px; text-align: center; font-variant-numeric: tabular-nums; font-size: 16px; }
+.nav .jump::-webkit-outer-spin-button, .nav .jump::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.nav .jump { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---- stage / flip viewer ------------------------------------------------ */
 .stage {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-  padding: calc(var(--nav) + env(safe-area-inset-top) + var(--s3)) var(--s3)
-           calc(var(--controls) + env(safe-area-inset-bottom) + var(--s3));
+  padding: calc(var(--nav) + env(safe-area-inset-top) + var(--s3)) var(--s3) var(--s3);
   background: var(--stage);
   touch-action: pan-y;
   transition: padding-right .24s ease;
 }
 @media (min-width: 860px) {
   body.panel-open .stage { padding-right: calc(var(--panel-w) + var(--s3)); }
-  body.panel-open .nav, body.panel-open .controls { padding-right: calc(var(--panel-w) + var(--s4)); }
+  body.panel-open .nav { padding-right: calc(var(--panel-w) + var(--s4)); }
   body.panel-open .edge.right { right: calc(var(--panel-w) + var(--s3)); }
-  .nav, .controls, .edge.right { transition: padding-right .24s ease, right .24s ease; }
+  .nav, .edge.right { transition: padding-right .24s ease, right .24s ease; }
 }
 .deck { position: relative; width: 100%; height: 100%; }
 .leaf {
@@ -119,6 +124,18 @@ mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: in
   box-shadow: var(--shadow);
 }
 body.invert .leaf img, body.invert .zoom img { filter: invert(1) hue-rotate(180deg); }
+
+.blank-notice {
+  position: absolute; inset: 0; z-index: 3; display: none;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.blank-notice.show { display: flex; }
+.blank-notice span {
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  border: 1px solid var(--border); border-radius: var(--r2);
+  padding: var(--s3) var(--s5); color: var(--muted); font-size: 14px;
+  box-shadow: var(--shadow);
+}
 
 .tapzones { position: fixed; inset: 0; z-index: 2; display: flex; }
 .tapzones div { flex: 1; transition: background .15s ease; }
@@ -143,20 +160,6 @@ body.invert .leaf img, body.invert .zoom img { filter: invert(1) hue-rotate(180d
 .edge.left { left: var(--s3); } .edge.right { right: var(--s3); }
 .edge[disabled] { opacity: .12; pointer-events: none; }
 @media (max-width: 640px) { .edge { width: 36px; height: 52px; font-size: 20px; opacity: .4; } }
-
-/* ---- bottom control bar ------------------------------------------------- */
-.controls {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: flex; align-items: center; justify-content: center; gap: var(--s3);
-  height: calc(var(--controls) + env(safe-area-inset-bottom));
-  padding: 0 var(--s4) env(safe-area-inset-bottom);
-  background: color-mix(in srgb, var(--bar) 90%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
-  border-top: 1px solid var(--border);
-  transition: transform .25s;
-}
-.controls.hidden { transform: translateY(101%); }
-.controls .jump { width: 64px; text-align: center; font-variant-numeric: tabular-nums; font-size: 16px; }
 
 /* ---- zoom overlay -------------------------------------------------------- */
 .zoom {
@@ -270,7 +273,15 @@ body.panel-open .panel-scrim { opacity: 1; pointer-events: auto; }
 .gate-actions .btn { flex: 1; height: 40px; }
 
 /* ---- responsive: phones -------------------------------------------------- */
+@media (max-width: 700px) {
+  :root { --nav: 108px; } /* nav wraps to two rows below; stage/edge offsets read this */
+  .nav {
+    grid-template-columns: 1fr auto; grid-template-areas: "left right" "center center";
+    row-gap: var(--s2);
+  }
+  .nav-left .title { display: none; } /* app name isn't essential once the nav is this busy */
+  .nav-center { justify-content: center; }
+}
 @media (max-width: 640px) {
   .panel { width: 100vw; border-left: none; }
-  .nav .title small { display: none; }
 }
