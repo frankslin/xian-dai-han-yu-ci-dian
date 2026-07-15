@@ -231,6 +231,27 @@ function setPanelTab(tab) {
 // every shard (still only ever fetched once each, then cached).
 let manifest = null, manifestPromise = null, manifestError = false;
 const shardCache = {}; // key -> { data, error, promise }
+
+// 繁简转换: this dictionary's headwords are Simplified-only, so a query
+// typed in Traditional Chinese needs converting before it can match. Loaded
+// lazily (only from startApp(), i.e. only after consent) via a
+// dynamically-injected <script> pointing at the opencc-js CDN build, so it
+// follows the same "no network before consent" rule as toc.json/dict
+// shards. If the CDN is unreachable, search silently falls back to
+// exact-Simplified matching only (openccConvert stays null).
+let openccConvert = null;
+function loadOpenCC() {
+  const ready = () => {
+    openccConvert = window.OpenCC.Converter({ from: 't', to: 'cn' });
+    const v = $('dictInput').value;
+    if (v && isCjk(v)) renderDictResults(v);
+  };
+  if (window.OpenCC) { ready(); return; }
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/opencc-js@1.4.1/dist/umd/full.js';
+  script.onload = ready;
+  document.head.appendChild(script);
+}
 function ensureManifest() {
   if (manifestPromise) return manifestPromise;
   manifestPromise = fetch('data/dict/manifest.json').then((r) => {
@@ -329,6 +350,10 @@ async function renderDictResults(rawQuery) {
   }
 
   const hasCjk = isCjk(query);
+  // Simplified-converted form of a Traditional-input query, so it can also
+  // match this dictionary's Simplified-only headwords (see loadOpenCC()
+  // above). Falls back to no-op (stays '') if the converter hasn't loaded.
+  const cjkAlt = hasCjk && openccConvert ? openccConvert(query) : '';
   const looksAlpha = /^[a-zA-Zü'’\s1-5]+$/.test(query);
   const pyQuery = looksAlpha ? normalizeQueryPinyin(query) : '';
   const requestedTone = looksAlpha ? requestedToneFromQuery(query) : null;
@@ -347,8 +372,8 @@ async function renderDictResults(rawQuery) {
       const head = row[0];
       const entry = { row, id: key + ':' + i };
       if (hasCjk) {
-        if (head === query) headExact.push(entry);
-        else if (head.startsWith(query)) headPrefix.push(entry);
+        if (head === query || (cjkAlt && head === cjkAlt)) headExact.push(entry);
+        else if (head.startsWith(query) || (cjkAlt && head.startsWith(cjkAlt))) headPrefix.push(entry);
       }
       if (pyQuery && (requestedTone === null || firstSyllableTone(row[1]) === requestedTone)) {
         const py = row[2];
@@ -524,6 +549,7 @@ function startApp() {
   const initial = getInitialImageIndexFromUrl();
   if (initial !== null) currentImageIndex = initial;
   showImage();
+  loadOpenCC();
 
   if (localStorage.getItem('invert') === '1' ||
     (localStorage.getItem('invert') === null && matchMedia('(prefers-color-scheme: dark)').matches)) {
